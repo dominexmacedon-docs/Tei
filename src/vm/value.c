@@ -9,99 +9,55 @@ static char *copy_string(const char *text) {
 
     char *copy = (char *)malloc(length + 1);
 
-    if (copy == NULL) {
-        fprintf(stderr, "Out of memory.\n");
-        exit(EXIT_FAILURE);
+    if (!copy) {
+        fprintf(stderr, "Out of memory\n");
+        exit(1);
     }
 
     memcpy(copy, text, length + 1);
-
     return copy;
 }
 
 Value value_null(void) {
-    Value value;
-
-    value.type = VALUE_NULL;
-
-    return value;
+    Value v;
+    v.type = VALUE_NULL;
+    return v;
 }
 
-Value value_bool(int boolean) {
-    Value value;
-
-    value.type = VALUE_BOOL;
-    value.as.boolean = boolean ? 1 : 0;
-
-    return value;
+Value value_bool(int b) {
+    Value v;
+    v.type = VALUE_BOOL;
+    v.as.boolean = b ? 1 : 0;
+    return v;
 }
 
-Value value_number(double number) {
-    Value value;
-
-    value.type = VALUE_NUMBER;
-    value.as.number = number;
-
-    return value;
+Value value_number(double n) {
+    Value v;
+    v.type = VALUE_NUMBER;
+    v.as.number = n;
+    return v;
 }
 
-Value value_string(const char *string) {
-    Value value;
-
-    value.type = VALUE_STRING;
-    value.as.string = copy_string(string);
-
-    return value;
+Value value_string(const char *s) {
+    Value v;
+    v.type = VALUE_STRING;
+    v.as.string = copy_string(s);
+    return v;
 }
 
-void value_free(Value *value) {
-    if (value == NULL) {
-        return;
-    }
-
-    if (value->type == VALUE_STRING) {
-        free(value->as.string);
-        value->as.string = NULL;
-    }
-
-    value->type = VALUE_NULL;
-}
-
-Value value_copy(Value value) {
-    switch (value.type) {
-
-        case VALUE_NULL:
-            return value_null();
-
-        case VALUE_BOOL:
-            return value_bool(value.as.boolean);
-
-        case VALUE_NUMBER:
-            return value_number(value.as.number);
-
-        case VALUE_STRING:
-            return value_string(value.as.string);
-
-        default:
-            return value_null();
-    }
-}
-
-int value_is_truthy(Value value) {
-    switch (value.type) {
-
+int value_is_truthy(Value v) {
+    switch (v.type) {
         case VALUE_NULL:
             return 0;
 
         case VALUE_BOOL:
-            return value.as.boolean;
+            return v.as.boolean;
 
         case VALUE_NUMBER:
-            return value.as.number != 0;
+            return v.as.number != 0;
 
         case VALUE_STRING:
-            return value.as.string != NULL &&
-                   value.as.string[0] != '\0';
+            return v.as.string != NULL && v.as.string[0] != '\0';
 
         default:
             return 0;
@@ -114,7 +70,6 @@ int value_equals(Value a, Value b) {
     }
 
     switch (a.type) {
-
         case VALUE_NULL:
             return 1;
 
@@ -132,23 +87,22 @@ int value_equals(Value a, Value b) {
     }
 }
 
-void value_print(Value value) {
-    switch (value.type) {
-
+void value_print(Value v) {
+    switch (v.type) {
         case VALUE_NULL:
             printf("null");
             break;
 
         case VALUE_BOOL:
-            printf("%s", value.as.boolean ? "true" : "false");
+            printf(v.as.boolean ? "true" : "false");
             break;
 
         case VALUE_NUMBER:
-            printf("%g", value.as.number);
+            printf("%g", v.as.number);
             break;
 
         case VALUE_STRING:
-            printf("%s", value.as.string);
+            printf("%s", v.as.string);
             break;
     }
 }
