@@ -1,6 +1,6 @@
 #ifndef VM_H
 #define VM_H
-
+#include <stdint.h>
 #include "chunk.h"
 #include "stack.h"
 #include "native.h"
