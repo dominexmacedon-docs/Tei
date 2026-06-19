@@ -5,12 +5,16 @@
 #include <stdlib.h>
 
 #define READ_BYTE() (*vm->ip++)
-#define READ_SHORT() (vm->ip += 2, (vm->ip[-2] << 8) | vm->ip[-1])
+#define READ_CONSTANT() (vm->chunk->constants[READ_BYTE()])
 
 static VMResult runtime_error(VM *vm, const char *message) {
     fprintf(stderr, "[VM Error] %s\n", message);
     return VM_RUNTIME_ERROR;
 }
+
+/* =========================
+   VM LIFECYCLE
+========================= */
 
 void vm_init(VM *vm) {
     vm->chunk = NULL;
@@ -18,8 +22,6 @@ void vm_init(VM *vm) {
 
     stack_init(&vm->stack);
     native_init(&vm->natives);
-
-    native_register(&vm->natives, "show", -1, native_show);
 }
 
 void vm_free(VM *vm) {
@@ -39,18 +41,16 @@ Value vm_pop(VM *vm) {
     return stack_pop(&vm->stack);
 }
 
-Value vm_peek(VM *vm, int distance) {
-    return stack_peek(&vm->stack, distance);
-}
+/* =========================
+   BINARY OPS HELPERS
+========================= */
 
-static void binary_num_op(VM *vm, char op) {
+static VMResult binary_numeric(VM *vm, char op) {
     Value b = vm_pop(vm);
     Value a = vm_pop(vm);
 
     if (a.type != VALUE_NUMBER || b.type != VALUE_NUMBER) {
-        runtime_error(vm, "Operands must be numbers");
-        vm_push(vm, value_null());
-        return;
+        return runtime_error(vm, "Operands must be numbers");
     }
 
     double result = 0;
@@ -64,7 +64,12 @@ static void binary_num_op(VM *vm, char op) {
     }
 
     vm_push(vm, value_number(result));
+    return VM_OK;
 }
+
+/* =========================
+   EXECUTION LOOP
+========================= */
 
 VMResult vm_run(VM *vm) {
     for (;;) {
@@ -73,38 +78,44 @@ VMResult vm_run(VM *vm) {
 
         switch (instruction) {
 
-            case OP_NOP:
-                break;
-
+            /* -------------------------
+               CONSTANT PUSH
+            --------------------------*/
             case OP_PUSH: {
-                Value value = READ_CONSTANT();
-                vm_push(vm, value);
+                Value constant = READ_CONSTANT();
+                vm_push(vm, constant);
                 break;
             }
 
-            case OP_POP:
+            /* -------------------------
+               STACK OPS
+            --------------------------*/
+            case OP_POP: {
                 vm_pop(vm);
                 break;
-
-            case OP_ADD: {
-                binary_num_op(vm, '+');
-                break;
             }
 
+            /* -------------------------
+               ARITHMETIC
+            --------------------------*/
+            case OP_ADD:
+                binary_numeric(vm, '+');
+                break;
+
             case OP_SUB:
-                binary_num_op(vm, '-');
+                binary_numeric(vm, '-');
                 break;
 
             case OP_MUL:
-                binary_num_op(vm, '*');
+                binary_numeric(vm, '*');
                 break;
 
             case OP_DIV:
-                binary_num_op(vm, '/');
+                binary_numeric(vm, '/');
                 break;
 
             case OP_MOD:
-                binary_num_op(vm, '%');
+                binary_numeric(vm, '%');
                 break;
 
             case OP_NEG: {
@@ -118,6 +129,9 @@ VMResult vm_run(VM *vm) {
                 break;
             }
 
+            /* -------------------------
+               COMPARISONS
+            --------------------------*/
             case OP_EQUAL: {
                 Value b = vm_pop(vm);
                 Value a = vm_pop(vm);
@@ -166,14 +180,20 @@ VMResult vm_run(VM *vm) {
                 break;
             }
 
+            /* -------------------------
+               CONTROL FLOW
+            --------------------------*/
             case OP_JUMP: {
-                uint16_t offset = READ_SHORT();
+                uint16_t offset = READ_BYTE();
+                offset = (offset << 8) | READ_BYTE();
                 vm->ip += offset;
                 break;
             }
 
             case OP_JUMP_IF_FALSE: {
-                uint16_t offset = READ_SHORT();
+                uint16_t offset = READ_BYTE();
+                offset = (offset << 8) | READ_BYTE();
+
                 Value v = vm_pop(vm);
 
                 if (!value_is_truthy(v)) {
@@ -182,13 +202,18 @@ VMResult vm_run(VM *vm) {
                 break;
             }
 
-            case OP_CALL: {
+            /* -------------------------
+               FUNCTION (NOT USED YET)
+            --------------------------*/
+            case OP_CALL:
                 return runtime_error(vm, "CALL not implemented yet");
-            }
 
             case OP_RETURN:
                 return VM_OK;
 
+            /* -------------------------
+               OUTPUT
+            --------------------------*/
             case OP_SHOW: {
                 Value v = vm_pop(vm);
                 value_print(v);
@@ -196,6 +221,9 @@ VMResult vm_run(VM *vm) {
                 break;
             }
 
+            /* -------------------------
+               STOP
+            --------------------------*/
             case OP_HALT:
                 return VM_OK;
 
@@ -204,6 +232,10 @@ VMResult vm_run(VM *vm) {
         }
     }
 }
+
+/* =========================
+   ENTRY
+========================= */
 
 VMResult vm_interpret(VM *vm, Chunk *chunk) {
     vm->chunk = chunk;
