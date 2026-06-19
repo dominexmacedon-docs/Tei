@@ -3,18 +3,16 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 
 #define READ_BYTE() (*vm->ip++)
+#define READ_SHORT() ((vm->ip += 2), (uint16_t)((vm->ip[-2] << 8) | vm->ip[-1]))
 #define READ_CONSTANT() (vm->chunk->constants[READ_BYTE()])
 
 static VMResult runtime_error(VM *vm, const char *message) {
     fprintf(stderr, "[VM Error] %s\n", message);
     return VM_RUNTIME_ERROR;
 }
-
-/* =========================
-   VM LIFECYCLE
-========================= */
 
 void vm_init(VM *vm) {
     vm->chunk = NULL;
@@ -41,10 +39,6 @@ Value vm_pop(VM *vm) {
     return stack_pop(&vm->stack);
 }
 
-/* =========================
-   BINARY OPS HELPERS
-========================= */
-
 static VMResult binary_numeric(VM *vm, char op) {
     Value b = vm_pop(vm);
     Value a = vm_pop(vm);
@@ -67,10 +61,6 @@ static VMResult binary_numeric(VM *vm, char op) {
     return VM_OK;
 }
 
-/* =========================
-   EXECUTION LOOP
-========================= */
-
 VMResult vm_run(VM *vm) {
     for (;;) {
 
@@ -78,26 +68,16 @@ VMResult vm_run(VM *vm) {
 
         switch (instruction) {
 
-            /* -------------------------
-               CONSTANT PUSH
-            --------------------------*/
             case OP_PUSH: {
                 Value constant = READ_CONSTANT();
                 vm_push(vm, constant);
                 break;
             }
 
-            /* -------------------------
-               STACK OPS
-            --------------------------*/
-            case OP_POP: {
+            case OP_POP:
                 vm_pop(vm);
                 break;
-            }
 
-            /* -------------------------
-               ARITHMETIC
-            --------------------------*/
             case OP_ADD:
                 binary_numeric(vm, '+');
                 break;
@@ -120,18 +100,13 @@ VMResult vm_run(VM *vm) {
 
             case OP_NEG: {
                 Value v = vm_pop(vm);
-
                 if (v.type != VALUE_NUMBER) {
                     return runtime_error(vm, "NEG expects number");
                 }
-
                 vm_push(vm, value_number(-v.as.number));
                 break;
             }
 
-            /* -------------------------
-               COMPARISONS
-            --------------------------*/
             case OP_EQUAL: {
                 Value b = vm_pop(vm);
                 Value a = vm_pop(vm);
@@ -180,40 +155,27 @@ VMResult vm_run(VM *vm) {
                 break;
             }
 
-            /* -------------------------
-               CONTROL FLOW
-            --------------------------*/
             case OP_JUMP: {
-                uint16_t offset = READ_BYTE();
-                offset = (offset << 8) | READ_BYTE();
+                uint16_t offset = READ_SHORT();
                 vm->ip += offset;
                 break;
             }
 
             case OP_JUMP_IF_FALSE: {
-                uint16_t offset = READ_BYTE();
-                offset = (offset << 8) | READ_BYTE();
-
+                uint16_t offset = READ_SHORT();
                 Value v = vm_pop(vm);
-
                 if (!value_is_truthy(v)) {
                     vm->ip += offset;
                 }
                 break;
             }
 
-            /* -------------------------
-               FUNCTION (NOT USED YET)
-            --------------------------*/
             case OP_CALL:
                 return runtime_error(vm, "CALL not implemented yet");
 
             case OP_RETURN:
                 return VM_OK;
 
-            /* -------------------------
-               OUTPUT
-            --------------------------*/
             case OP_SHOW: {
                 Value v = vm_pop(vm);
                 value_print(v);
@@ -221,9 +183,6 @@ VMResult vm_run(VM *vm) {
                 break;
             }
 
-            /* -------------------------
-               STOP
-            --------------------------*/
             case OP_HALT:
                 return VM_OK;
 
@@ -233,15 +192,9 @@ VMResult vm_run(VM *vm) {
     }
 }
 
-/* =========================
-   ENTRY
-========================= */
-
 VMResult vm_interpret(VM *vm, Chunk *chunk) {
     vm->chunk = chunk;
     vm->ip = chunk->code;
-
     vm_reset_stack(vm);
-
     return vm_run(vm);
 }
