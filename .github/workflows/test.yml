@@ -20,14 +20,14 @@ jobs:
       - name: Build VM test
         run: |
           gcc tests/test_vm.c \
-              src/vm/vm.c \
-              src/vm/chunk.c \
-              src/vm/value.c \
-              src/vm/stack.c \
-              src/vm/native.c \
-              -Iinclude \
-              -o test_vm
-
+          src/vm/vm.c \
+          src/vm/chunk.c \
+          src/vm/stack.c \
+          src/vm/value.c \
+          src/vm/object.c \
+          src/vm/native.c \
+          -Iinclude \
+          -o test_vm
       - name: Run VM test
         run: |
           ./test_vm
