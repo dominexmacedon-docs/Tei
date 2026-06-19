@@ -19,7 +19,6 @@ typedef struct {
 } Chunk;
 
 void chunk_init(Chunk *chunk);
-
 void chunk_free(Chunk *chunk);
 
 void chunk_write(Chunk *chunk, unsigned char byte, int line);
