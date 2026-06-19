@@ -45,6 +45,36 @@ Value value_string(const char *s) {
     return v;
 }
 
+void value_free(Value *v) {
+    if (!v) return;
+
+    if (v->type == VALUE_STRING) {
+        free(v->as.string);
+        v->as.string = NULL;
+    }
+
+    v->type = VALUE_NULL;
+}
+
+Value value_copy(Value v) {
+    switch (v.type) {
+        case VALUE_NULL:
+            return value_null();
+
+        case VALUE_BOOL:
+            return value_bool(v.as.boolean);
+
+        case VALUE_NUMBER:
+            return value_number(v.as.number);
+
+        case VALUE_STRING:
+            return value_string(v.as.string);
+
+        default:
+            return value_null();
+    }
+}
+
 int value_is_truthy(Value v) {
     switch (v.type) {
         case VALUE_NULL:
