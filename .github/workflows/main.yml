@@ -1,0 +1,118 @@
+name: Initialize VM-Based Language Project
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  scaffold:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Create project structure
+        run: |
+          mkdir -p include
+          mkdir -p build
+
+          mkdir -p src/vm
+          mkdir -p src/compiler
+          mkdir -p src/parser
+          mkdir -p src/lexer
+          mkdir -p tests
+
+          touch include/common.h
+
+          touch src/main.c
+
+          # ==========================
+          # VM (Implement First)
+          # ==========================
+
+          touch src/vm/opcode.h
+
+          touch src/vm/value.h
+          touch src/vm/value.c
+
+          touch src/vm/chunk.h
+          touch src/vm/chunk.c
+
+          touch src/vm/stack.h
+          touch src/vm/stack.c
+
+          touch src/vm/object.h
+          touch src/vm/object.c
+
+          touch src/vm/native.h
+          touch src/vm/native.c
+
+          touch src/vm/vm.h
+          touch src/vm/vm.c
+
+          # ==========================
+          # Compiler (Later)
+          # ==========================
+
+          touch src/compiler/compiler.h
+          touch src/compiler/compiler_core.c
+          touch src/compiler/codegen.c
+          touch src/compiler/emit.c
+          touch src/compiler/symbol.c
+          touch src/compiler/semantic.c
+
+          # ==========================
+          # Parser (Later)
+          # ==========================
+
+          touch src/parser/parser.h
+          touch src/parser/parser_core.c
+          touch src/parser/parser_expr.c
+          touch src/parser/parser_stmt.c
+          touch src/parser/ast.c
+
+          # ==========================
+          # Lexer (Later)
+          # ==========================
+
+          touch src/lexer/lexer.h
+          touch src/lexer/core.c
+          touch src/lexer/utils.c
+          touch src/lexer/tokens.c
+          touch src/lexer/keywords.c
+
+          # ==========================
+          # Tests
+          # ==========================
+
+          touch tests/test_vm.c
+          touch tests/test_compiler.c
+          touch tests/test_parser.c
+          touch tests/test_lexer.c
+
+      - name: Show project structure
+        run: |
+          find .
+
+      - name: Commit changes
+        run: |
+          git add .
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          git commit -m "Initialize VM-first language project structure"
+
+      - name: Push changes
+        run: |
+          git push
