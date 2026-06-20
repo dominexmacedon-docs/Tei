@@ -1,0 +1,37 @@
+name: VM Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc
+
+      - name: Compile VM test
+        run: |
+          gcc -std=c11 \
+            -I./src/vm \
+            src/vm/vm.c \
+            src/vm/frame.c \
+            src/vm/value.c \
+            src/vm/stack.c \
+            src/vm/chunk.c \
+            src/vm/native.c \
+            src/vm/object.c \
+            tests/test_vm.c \
+            -o test_vm
+
+      - name: Run tests
+        run: |
+          ./test_vm
