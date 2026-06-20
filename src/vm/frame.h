@@ -2,6 +2,7 @@
 #define FRAME_H
 
 #include <stdint.h>
+
 #include "chunk.h"
 #include "value.h"
 
@@ -10,6 +11,7 @@
 typedef struct {
     Chunk *chunk;
     uint8_t *ip;
+    uint8_t *return_ip;
     int stack_offset;
 } CallFrame;
 
@@ -19,11 +21,19 @@ typedef struct {
 } CallStack;
 
 void frame_init(CallStack *cs);
+
 void frame_free(CallStack *cs);
 
 CallFrame *frame_current(CallStack *cs);
 
-int frame_push(CallStack *cs, Chunk *chunk, uint8_t *ip, int stack_offset);
+int frame_push(
+    CallStack *cs,
+    Chunk *chunk,
+    uint8_t *ip,
+    uint8_t *return_ip,
+    int stack_offset
+);
+
 void frame_pop(CallStack *cs);
 
 #endif
