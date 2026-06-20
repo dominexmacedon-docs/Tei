@@ -25,11 +25,9 @@ CallFrame *frame_current(CallStack *cs) {
 int frame_push(CallStack *cs, Chunk *chunk, uint8_t *ip, int stack_offset) {
     if (cs->count >= FRAMES_MAX) {
         runtime_error("Stack overflow: too many call frames");
-        return 0;
     }
 
     CallFrame *frame = &cs->frames[cs->count++];
-
     frame->chunk = chunk;
     frame->ip = ip;
     frame->stack_offset = stack_offset;
