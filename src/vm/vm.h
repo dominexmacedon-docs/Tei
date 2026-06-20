@@ -2,10 +2,13 @@
 #define VM_H
 
 #include <stdint.h>
+
 #include "chunk.h"
 #include "stack.h"
 #include "native.h"
 #include "frame.h"
+
+#define VM_MAX_LOCALS 256
 
 typedef enum {
     VM_OK,
