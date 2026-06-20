@@ -1,4 +1,5 @@
 #include "frame.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -19,17 +20,26 @@ CallFrame *frame_current(CallStack *cs) {
     if (cs->count == 0) {
         runtime_error("No active call frame");
     }
+
     return &cs->frames[cs->count - 1];
 }
 
-int frame_push(CallStack *cs, Chunk *chunk, uint8_t *ip, int stack_offset) {
+int frame_push(
+    CallStack *cs,
+    Chunk *chunk,
+    uint8_t *ip,
+    uint8_t *return_ip,
+    int stack_offset
+) {
     if (cs->count >= FRAMES_MAX) {
         runtime_error("Stack overflow: too many call frames");
     }
 
     CallFrame *frame = &cs->frames[cs->count++];
+
     frame->chunk = chunk;
     frame->ip = ip;
+    frame->return_ip = return_ip;
     frame->stack_offset = stack_offset;
 
     return 1;
