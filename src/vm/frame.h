@@ -8,9 +8,9 @@
 #define FRAMES_MAX 64
 
 typedef struct {
-    Chunk *chunk;      
-    uint8_t *ip;       
-    int stack_offset; 
+    Chunk *chunk;
+    uint8_t *ip;
+    int stack_offset;
 } CallFrame;
 
 typedef struct {
