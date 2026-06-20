@@ -45,12 +45,25 @@ Value value_string(const char *s) {
     return v;
 }
 
+Value value_object(Object *object) {
+    Value v;
+    v.type = VALUE_OBJECT;
+    v.as.object = object;
+    return v;
+}
+
 void value_free(Value *v) {
-    if (!v) return;
+    if (!v) {
+        return;
+    }
 
     if (v->type == VALUE_STRING) {
         free(v->as.string);
         v->as.string = NULL;
+    }
+
+    if (v->type == VALUE_OBJECT) {
+        v->as.object = NULL;
     }
 
     v->type = VALUE_NULL;
@@ -70,6 +83,9 @@ Value value_copy(Value v) {
         case VALUE_STRING:
             return value_string(v.as.string);
 
+        case VALUE_OBJECT:
+            return value_object(v.as.object);
+
         default:
             return value_null();
     }
@@ -88,6 +104,9 @@ int value_is_truthy(Value v) {
 
         case VALUE_STRING:
             return v.as.string != NULL && v.as.string[0] != '\0';
+
+        case VALUE_OBJECT:
+            return v.as.object != NULL;
 
         default:
             return 0;
@@ -112,6 +131,9 @@ int value_equals(Value a, Value b) {
         case VALUE_STRING:
             return strcmp(a.as.string, b.as.string) == 0;
 
+        case VALUE_OBJECT:
+            return a.as.object == b.as.object;
+
         default:
             return 0;
     }
@@ -133,6 +155,10 @@ void value_print(Value v) {
 
         case VALUE_STRING:
             printf("%s", v.as.string);
+            break;
+
+        case VALUE_OBJECT:
+            printf("<object:%p>", (void *)v.as.object);
             break;
     }
 }
