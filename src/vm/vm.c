@@ -1,9 +1,12 @@
 #include "vm.h"
 #include "opcode.h"
+#include "object.h"
+#include "frame.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
 
 #define READ_BYTE() (*vm->ip++)
 #define READ_SHORT() ((vm->ip += 2), (uint16_t)((vm->ip[-2] << 8) | vm->ip[-1]))
@@ -20,11 +23,14 @@ void vm_init(VM *vm) {
 
     stack_init(&vm->stack);
     native_init(&vm->natives);
+
+    frame_init(&vm->frames);
 }
 
 void vm_free(VM *vm) {
     native_free(&vm->natives);
     stack_free(&vm->stack);
+    frame_free(&vm->frames);
 }
 
 void vm_reset_stack(VM *vm) {
@@ -37,6 +43,10 @@ void vm_push(VM *vm, Value value) {
 
 Value vm_pop(VM *vm) {
     return stack_pop(&vm->stack);
+}
+
+Value vm_peek(VM *vm, int distance) {
+    return vm->stack.values[vm->stack.top - 1 - distance];
 }
 
 static VMResult binary_numeric(VM *vm, char op) {
@@ -59,6 +69,32 @@ static VMResult binary_numeric(VM *vm, char op) {
 
     vm_push(vm, value_number(result));
     return VM_OK;
+}
+
+static VMResult call_function(VM *vm, ObjectFunction *function, int arg_count) {
+    if (arg_count != function->arity) {
+        return runtime_error(vm, "Incorrect argument count");
+    }
+
+    if (frame_push(&vm->frames, &function->chunk, function->chunk.code, vm->stack.top - arg_count - 1) == 0) {
+        return runtime_error(vm, "Too many call frames");
+    }
+
+    vm->chunk = &function->chunk;
+    vm->ip = function->chunk.code;
+
+    return VM_OK;
+}
+
+static VMResult call_value(VM *vm, Value callee, int arg_count) {
+    if (callee.type != VALUE_STRING) {
+        return runtime_error(vm, "Can only call functions for now");
+    }
+
+    Object *obj = NULL;
+    (void)obj;
+
+    return runtime_error(vm, "Invalid call target");
 }
 
 VMResult vm_run(VM *vm) {
@@ -170,11 +206,66 @@ VMResult vm_run(VM *vm) {
                 break;
             }
 
-            case OP_CALL:
-                return runtime_error(vm, "CALL not implemented yet");
+            case OP_CALL: {
+                int arg_count = READ_BYTE();
+                Value callee = vm_peek(vm, arg_count);
 
-            case OP_RETURN:
-                return VM_OK;
+                if (callee.type == VALUE_STRING) {
+                    return runtime_error(vm, "Native call path not wired");
+                }
+
+                Object *obj = (Object *)callee.as.string;
+
+                if (obj->type == OBJECT_FUNCTION) {
+                    ObjectFunction *function = (ObjectFunction *)obj;
+                    VMResult result = call_function(vm, function, arg_count);
+                    if (result != VM_OK) return result;
+                    break;
+                }
+
+                if (obj->type == OBJECT_NATIVE) {
+                    ObjectNative *native = (ObjectNative *)obj;
+
+                    if (native->arity != arg_count) {
+                        return runtime_error(vm, "Native argument mismatch");
+                    }
+
+                    Value args[32];
+                    for (int i = arg_count - 1; i >= 0; i--) {
+                        args[i] = vm_pop(vm);
+                    }
+
+                    vm_pop(vm);
+
+                    Value result = native->function(arg_count, args);
+                    vm_push(vm, result);
+                    break;
+                }
+
+                return runtime_error(vm, "Invalid call target");
+            }
+
+            case OP_RETURN: {
+                if (vm->frames.count == 0) {
+                    return VM_OK;
+                }
+
+                Value result = vm_pop(vm);
+
+                frame_pop(&vm->frames);
+
+                if (vm->frames.count == 0) {
+                    return VM_OK;
+                }
+
+                vm_push(vm, result);
+
+                CallFrame *frame = frame_current(&vm->frames);
+                vm->chunk = frame->chunk;
+                vm->ip = frame->ip;
+
+                break;
+            }
 
             case OP_SHOW: {
                 Value v = vm_pop(vm);
@@ -195,6 +286,9 @@ VMResult vm_run(VM *vm) {
 VMResult vm_interpret(VM *vm, Chunk *chunk) {
     vm->chunk = chunk;
     vm->ip = chunk->code;
+
+    frame_push(&vm->frames, chunk, chunk->code, 0);
+
     vm_reset_stack(vm);
     return vm_run(vm);
 }
