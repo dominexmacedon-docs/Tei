@@ -5,99 +5,122 @@
 #include "../src/vm/value.h"
 #include "../src/vm/vm.h"
 
+static void emit_op(Chunk *chunk, OpCode op) {
+    chunk_write(chunk, (unsigned char)op, 1);
+}
+
 static void emit_constant(Chunk *chunk, Value value) {
     int index = chunk_add_constant(chunk, value);
 
-    chunk_write(chunk, OP_PUSH, 1);
+    emit_op(chunk, OP_PUSH);
     chunk_write(chunk, (unsigned char)index, 1);
 }
 
-static void emit_opcode(Chunk *chunk, OpCode op) {
-    chunk_write(chunk, op, 1);
+static void emit_jump_if_false(Chunk *chunk, uint16_t offset) {
+    emit_op(chunk, OP_JUMP);
+    chunk->code[chunk->count - 1] = OP_JUMP_IF_FALSE;
+
+    chunk_write(chunk, (offset >> 8) & 0xff, 1);
+    chunk_write(chunk, offset & 0xff, 1);
+}
+
+static void emit_jump(Chunk *chunk, uint16_t offset) {
+    emit_op(chunk, OP_JUMP);
+
+    chunk_write(chunk, (offset >> 8) & 0xff, 1);
+    chunk_write(chunk, offset & 0xff, 1);
 }
 
 int main(void) {
+
     Chunk chunk;
     chunk_init(&chunk);
 
     printf("========== BUILDING BYTECODE ==========\n");
 
-    /* show(10 + 20) */
+    /*
+        show 10 + 20;
+    */
+
     emit_constant(&chunk, value_number(10));
     emit_constant(&chunk, value_number(20));
-    emit_opcode(&chunk, OP_ADD);
-    emit_opcode(&chunk, OP_SHOW);
+    emit_op(&chunk, OP_ADD);
+    emit_op(&chunk, OP_SHOW);
 
-    /* show(50 - 8) */
-    emit_constant(&chunk, value_number(50));
-    emit_constant(&chunk, value_number(8));
-    emit_opcode(&chunk, OP_SUB);
-    emit_opcode(&chunk, OP_SHOW);
+    /*
+        if (1 < 2)
+            show 111;
+    */
 
-    /* show(6 * 7) */
-    emit_constant(&chunk, value_number(6));
-    emit_constant(&chunk, value_number(7));
-    emit_opcode(&chunk, OP_MUL);
-    emit_opcode(&chunk, OP_SHOW);
-
-    /* show(100 / 5) */
-    emit_constant(&chunk, value_number(100));
-    emit_constant(&chunk, value_number(5));
-    emit_opcode(&chunk, OP_DIV);
-    emit_opcode(&chunk, OP_SHOW);
-
-    /* show(17 % 5) */
-    emit_constant(&chunk, value_number(17));
-    emit_constant(&chunk, value_number(5));
-    emit_opcode(&chunk, OP_MOD);
-    emit_opcode(&chunk, OP_SHOW);
-
-    /* show(-8) */
-    emit_constant(&chunk, value_number(8));
-    emit_opcode(&chunk, OP_NEG);
-    emit_opcode(&chunk, OP_SHOW);
-
-    /* show(5 == 5) */
-    emit_constant(&chunk, value_number(5));
-    emit_constant(&chunk, value_number(5));
-    emit_opcode(&chunk, OP_EQUAL);
-    emit_opcode(&chunk, OP_SHOW);
-
-    /* show(5 != 6) */
-    emit_constant(&chunk, value_number(5));
-    emit_constant(&chunk, value_number(6));
-    emit_opcode(&chunk, OP_NOT_EQUAL);
-    emit_opcode(&chunk, OP_SHOW);
-
-    /* show(9 > 3) */
-    emit_constant(&chunk, value_number(9));
-    emit_constant(&chunk, value_number(3));
-    emit_opcode(&chunk, OP_GREATER);
-    emit_opcode(&chunk, OP_SHOW);
-
-    /* show(2 < 7) */
+    emit_constant(&chunk, value_number(1));
     emit_constant(&chunk, value_number(2));
-    emit_constant(&chunk, value_number(7));
-    emit_opcode(&chunk, OP_LESS);
-    emit_opcode(&chunk, OP_SHOW);
+    emit_op(&chunk, OP_LESS);
 
-    /* show(!false) */
-    emit_constant(&chunk, value_bool(0));
-    emit_opcode(&chunk, OP_NOT);
-    emit_opcode(&chunk, OP_SHOW);
+    /*
+        Skip THEN block if false.
 
-    emit_opcode(&chunk, OP_HALT);
+        THEN block =
+            PUSH 111
+            SHOW
 
-    printf("========== RUNNING VM ==========\n");
+        Size = 4 bytes
+    */
+
+    emit_jump_if_false(&chunk, 4);
+
+    emit_constant(&chunk, value_number(111));
+    emit_op(&chunk, OP_SHOW);
+
+    /*
+        if (2 < 1)
+            show 999;
+        else
+            show 222;
+    */
+
+    emit_constant(&chunk, value_number(2));
+    emit_constant(&chunk, value_number(1));
+    emit_op(&chunk, OP_LESS);
+
+    /*
+        THEN size = 4 bytes
+        JUMP size = 3 bytes
+        total skip = 7
+    */
+
+    emit_jump_if_false(&chunk, 7);
+
+    emit_constant(&chunk, value_number(999));
+    emit_op(&chunk, OP_SHOW);
+
+    /*
+        Skip ELSE
+    */
+
+    emit_jump(&chunk, 4);
+
+    emit_constant(&chunk, value_number(222));
+    emit_op(&chunk, OP_SHOW);
+
+    /*
+        show !(0);
+    */
+
+    emit_constant(&chunk, value_number(0));
+    emit_op(&chunk, OP_NOT);
+    emit_op(&chunk, OP_SHOW);
+
+    emit_op(&chunk, OP_HALT);
 
     VM vm;
     vm_init(&vm);
 
+    printf("========== RUNNING VM ==========\n");
+
     VMResult result = vm_interpret(&vm, &chunk);
 
     printf("================================\n");
-    printf("VM Result: %s\n",
-           result == VM_OK ? "OK" : "RUNTIME ERROR");
+    printf("VM Result: %s\n", result == VM_OK ? "OK" : "ERROR");
 
     vm_free(&vm);
     chunk_free(&chunk);
