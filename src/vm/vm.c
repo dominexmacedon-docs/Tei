@@ -23,7 +23,6 @@ void vm_init(VM *vm) {
 
     stack_init(&vm->stack);
     native_init(&vm->natives);
-
     frame_init(&vm->frames);
 }
 
@@ -84,17 +83,6 @@ static VMResult call_function(VM *vm, ObjectFunction *function, int arg_count) {
     vm->ip = function->chunk.code;
 
     return VM_OK;
-}
-
-static VMResult call_value(VM *vm, Value callee, int arg_count) {
-    if (callee.type != VALUE_STRING) {
-        return runtime_error(vm, "Can only call functions for now");
-    }
-
-    Object *obj = NULL;
-    (void)obj;
-
-    return runtime_error(vm, "Invalid call target");
 }
 
 VMResult vm_run(VM *vm) {
@@ -210,39 +198,40 @@ VMResult vm_run(VM *vm) {
                 int arg_count = READ_BYTE();
                 Value callee = vm_peek(vm, arg_count);
 
-                if (callee.type == VALUE_STRING) {
-                    return runtime_error(vm, "Native call path not wired");
-                }
+                if (callee.type != VALUE_STRING) {
+                    Object *obj = (Object *)callee.as.string;
 
-                Object *obj = (Object *)callee.as.string;
-
-                if (obj->type == OBJECT_FUNCTION) {
-                    ObjectFunction *function = (ObjectFunction *)obj;
-                    VMResult result = call_function(vm, function, arg_count);
-                    if (result != VM_OK) return result;
-                    break;
-                }
-
-                if (obj->type == OBJECT_NATIVE) {
-                    ObjectNative *native = (ObjectNative *)obj;
-
-                    if (native->arity != arg_count) {
-                        return runtime_error(vm, "Native argument mismatch");
+                    if (obj->type == OBJECT_FUNCTION) {
+                        ObjectFunction *function = (ObjectFunction *)obj;
+                        VMResult result = call_function(vm, function, arg_count);
+                        if (result != VM_OK) return result;
+                        break;
                     }
 
-                    Value args[32];
-                    for (int i = arg_count - 1; i >= 0; i--) {
-                        args[i] = vm_pop(vm);
+                    if (obj->type == OBJECT_NATIVE) {
+                        ObjectNative *native = (ObjectNative *)obj;
+
+                        if (native->arity != arg_count) {
+                            return runtime_error(vm, "Native argument mismatch");
+                        }
+
+                        Value args[32];
+
+                        for (int i = arg_count - 1; i >= 0; i--) {
+                            args[i] = vm_pop(vm);
+                        }
+
+                        vm_pop(vm);
+
+                        Value result = native->function(arg_count, args);
+                        vm_push(vm, result);
+                        break;
                     }
 
-                    vm_pop(vm);
-
-                    Value result = native->function(arg_count, args);
-                    vm_push(vm, result);
-                    break;
+                    return runtime_error(vm, "Invalid call target");
                 }
 
-                return runtime_error(vm, "Invalid call target");
+                return runtime_error(vm, "Call target not a function");
             }
 
             case OP_RETURN: {
