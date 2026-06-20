@@ -69,13 +69,30 @@ static VMResult binary_numeric(VM *vm, char op) {
     vm_push(vm, value_number(result));
     return VM_OK;
 }
+static CallFrame *current_frame(VM *vm) {
+    return frame_current(&vm->frames);
+}
 
+static Value load_local(VM *vm, uint8_t slot) {
+    CallFrame *frame = current_frame(vm);
+    return vm->stack.values[frame->stack_offset + slot];
+}
+
+static void store_local(VM *vm, uint8_t slot, Value value) {
+    CallFrame *frame = current_frame(vm);
+    vm->stack.values[frame->stack_offset + slot] = value_copy(value);
+}
 static VMResult call_function(VM *vm, ObjectFunction *function, int arg_count) {
     if (arg_count != function->arity) {
         return runtime_error(vm, "Incorrect argument count");
     }
 
-    if (frame_push(&vm->frames, &function->chunk, function->chunk.code, vm->stack.top - arg_count - 1) == 0) {
+    if (!frame_push(
+            &vm->frames,
+            &function->chunk,
+            function->chunk.code,
+            vm->ip,
+            (int)(vm->stack.top - arg_count - 1))) {
         return runtime_error(vm, "Too many call frames");
     }
 
@@ -113,7 +130,19 @@ VMResult vm_run(VM *vm) {
             case OP_MUL:
                 binary_numeric(vm, '*');
                 break;
-
+            case OP_NOP:
+                break;
+            case OP_LOAD: {
+                uint8_t slot = READ_BYTE();
+                vm_push(vm, load_local(vm, slot));
+                break;
+            }
+            case OP_STORE: {
+                uint8_t slot = READ_BYTE();
+                store_local(vm, slot, vm_peek(vm, 0));
+                break;
+            }
+            
             case OP_DIV:
                 binary_numeric(vm, '/');
                 break;
@@ -195,67 +224,73 @@ VMResult vm_run(VM *vm) {
             }
 
             case OP_CALL: {
-                int arg_count = READ_BYTE();
-                Value callee = vm_peek(vm, arg_count);
+    int arg_count = READ_BYTE();
+    Value callee = vm_peek(vm, arg_count);
 
-                if (callee.type != VALUE_STRING) {
-                    Object *obj = (Object *)callee.as.string;
+    if (callee.type != VALUE_OBJECT) {
+        return runtime_error(vm, "Call target not an object");
+    }
 
-                    if (obj->type == OBJECT_FUNCTION) {
-                        ObjectFunction *function = (ObjectFunction *)obj;
-                        VMResult result = call_function(vm, function, arg_count);
-                        if (result != VM_OK) return result;
-                        break;
-                    }
+    Object *obj = callee.as.object;
 
-                    if (obj->type == OBJECT_NATIVE) {
-                        ObjectNative *native = (ObjectNative *)obj;
+    if (obj->type == OBJECT_FUNCTION) {
+        ObjectFunction *function = (ObjectFunction *)obj;
+        VMResult result = call_function(vm, function, arg_count);
 
-                        if (native->arity != arg_count) {
-                            return runtime_error(vm, "Native argument mismatch");
-                        }
+        if (result != VM_OK) {
+            return result;
+        }
 
-                        Value args[32];
+        break;
+    }
 
-                        for (int i = arg_count - 1; i >= 0; i--) {
-                            args[i] = vm_pop(vm);
-                        }
+    if (obj->type == OBJECT_NATIVE) {
+        ObjectNative *native = (ObjectNative *)obj;
 
-                        vm_pop(vm);
+        if (native->arity != arg_count) {
+            return runtime_error(vm, "Native argument mismatch");
+        }
 
-                        Value result = native->function(arg_count, args);
-                        vm_push(vm, result);
-                        break;
-                    }
+        Value args[32];
 
-                    return runtime_error(vm, "Invalid call target");
-                }
+        for (int i = arg_count - 1; i >= 0; i--) {
+            args[i] = vm_pop(vm);
+        }
 
-                return runtime_error(vm, "Call target not a function");
-            }
+        vm_pop(vm);
+
+        Value result = native->function(arg_count, args);
+        vm_push(vm, result);
+
+        break;
+    }
+
+    return runtime_error(vm, "Invalid call target");
+}
 
             case OP_RETURN: {
-                if (vm->frames.count == 0) {
-                    return VM_OK;
-                }
+    Value result = vm_pop(vm);
 
-                Value result = vm_pop(vm);
+    CallFrame *finished = frame_current(&vm->frames);
 
-                frame_pop(&vm->frames);
+    vm->stack.top = finished->stack_offset;
 
-                if (vm->frames.count == 0) {
-                    return VM_OK;
-                }
+    frame_pop(&vm->frames);
 
-                vm_push(vm, result);
+    if (vm->frames.count == 0) {
+        vm_push(vm, result);
+        return VM_OK;
+    }
 
-                CallFrame *frame = frame_current(&vm->frames);
-                vm->chunk = frame->chunk;
-                vm->ip = frame->ip;
+    CallFrame *caller = frame_current(&vm->frames);
 
-                break;
-            }
+    vm->chunk = caller->chunk;
+    vm->ip = caller->return_ip;
 
+    vm_push(vm, result);
+
+    break;
+}
             case OP_SHOW: {
                 Value v = vm_pop(vm);
                 value_print(v);
